@@ -6,7 +6,7 @@ contract CommitReveal {
 
     uint256 constant INVALID_COMMITMENT_SELECTOR = 0xc06789fa;
     uint256 public constant COMMITMENT_LIFESPAN = 1 days;
-    uint256 public constant COMMITMENT_DELAY = 1 minutes;
+    uint256 public constant COMMITMENT_PERIOD = 1 minutes;
 
     mapping(address committer => mapping(bytes32 commitmentHash => uint256 timestamp)) internal _commitments;
 
@@ -27,7 +27,10 @@ contract CommitReveal {
         ///@solidity memory-safe-assembly
         assembly {
             mstore(0, salt)
-            mstore(0x20, calldataload(name.offset))
+            let loaded := calldataload(name.offset)
+            let numShiftBits := sub(256, shl(3, name.length))
+            let cleaned := shl(numShiftBits, shr(numShiftBits, loaded))
+            mstore(0x20, cleaned)
             result := keccak256(0, 0x40)
         }
     }
@@ -50,14 +53,17 @@ contract CommitReveal {
         ///@solidity memory-safe-assembly
         assembly {
             mstore(0, salt)
-            mstore(0x20, calldataload(name.offset))
+            let loaded := calldataload(name.offset)
+            let numShiftBits := sub(256, shl(3, name.length))
+            let cleaned := shl(numShiftBits, shr(numShiftBits, loaded))
+            mstore(0x20, cleaned)
             computedHash := keccak256(0, 0x40)
         }
         uint256 committedTimestamp = getCommitment(msg.sender, computedHash);
         ///@solidity memory-safe-assembly
         assembly {
             let errBuffer := gt(sub(timestamp(), committedTimestamp), COMMITMENT_LIFESPAN)
-            errBuffer := or(errBuffer, lt(sub(timestamp(), committedTimestamp), COMMITMENT_DELAY))
+            errBuffer := or(errBuffer, lt(sub(timestamp(), committedTimestamp), COMMITMENT_PERIOD))
             if errBuffer {
                 mstore(0, INVALID_COMMITMENT_SELECTOR)
                 revert(0x1c, 0x04)

@@ -69,7 +69,7 @@ contract CommitRevealTest is Test {
         test.validateCommitment(validationSalt, name);
 
         // commitment just right
-        vm.warp(start + test.COMMITMENT_DELAY());
+        vm.warp(start + test.COMMITMENT_PERIOD());
         test.validateCommitment(validationSalt, name);
     }
 
@@ -82,7 +82,7 @@ contract CommitRevealTest is Test {
     ) public {
         start = bound(start, 1 days + 1, type(uint256).max - 1 days - 1);
         vm.assume(bytes(name).length > 0);
-        validDelay = bound(validDelay, test.COMMITMENT_DELAY(), test.COMMITMENT_LIFESPAN());
+        validDelay = bound(validDelay, test.COMMITMENT_PERIOD(), test.COMMITMENT_LIFESPAN());
         emit log_named_uint("name length", bytes(name).length);
         vm.warp(start);
         bytes32 commitmentHash = test.calculateCommitmentHash(name, validationSalt);

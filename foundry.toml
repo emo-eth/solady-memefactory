@@ -3,5 +3,10 @@ src = "src"
 out = "out"
 libs = ["lib"]
 remappings = ["forge-std/=lib/forge-std/src/", "solady/=lib/solady/src/"]
+optimizer_runs = 10_000_000
+optimizer = true
+block_timestamp = 1683615499
 
+[rpc_endpoints]
+mainnet = '${ETHEREUM_RPC_URL}'
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

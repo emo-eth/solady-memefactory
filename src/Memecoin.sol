@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
 import {ERC20} from "solady/tokens/ERC20.sol";
@@ -22,8 +22,9 @@ contract Memecoin is ERC20, Ownable {
     address private constant UNISWAP_ROUTER = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
     address private constant UNISWAP_FACTORY = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
     address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    bytes32 private constant POOL_INITCODE_HASH = 0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
 
-    uint256 public immutable TEAM_BPS;
+    uint256 immutable TEAM_BPS;
     uint256 public immutable LIQUIDITY_LOCKED_UNTIL;
     address public immutable UNISWAP_PAIR;
 
@@ -33,7 +34,7 @@ contract Memecoin is ERC20, Ownable {
     constructor(
         string memory name_,
         string memory sym,
-        uint256 _totalSupply,
+        uint256 fullTotalSupply,
         address _deployer,
         uint256 _teamBps,
         uint256 liquidityLockPeriodInSeconds
@@ -63,17 +64,27 @@ contract Memecoin is ERC20, Ownable {
             _symbol := mload(add(31, sym))
             // add timestamp to liquidity lock period
             liquidityLockedUntil := add(timestamp(), liquidityLockPeriodInSeconds)
+            // if addition overflowed, set to max uint256
+            liquidityLockedUntil :=
+                or(
+                    liquidityLockedUntil,
+                    // LHS will be 0 if no overflow
+                    mul(
+                        lt(liquidityLockedUntil, timestamp()),
+                        //type(uint256).max
+                        not(0)
+                    )
+                )
         }
 
         // assign owner
-        _setOwner(_deployer);
+        _initializeOwner(_deployer);
 
         // calculate team and pool tokens
         uint256 teamTokens;
         uint256 poolTokens;
         ///@solidity memory-safe-assembly
         assembly {
-            let fullTotalSupply := mul(_totalSupply, 1000000000000000000)
             teamTokens := div(mul(fullTotalSupply, _teamBps), 10000)
             poolTokens := sub(fullTotalSupply, teamTokens)
         }
@@ -81,7 +92,31 @@ contract Memecoin is ERC20, Ownable {
         // mint team tokens to deployer
         _mint(_deployer, teamTokens);
         // declare pair temp variable
-        address pair;
+        uint256 poolCreate2Hash;
+        ///@solidity memory-safe-assembly
+        assembly {
+            // sort token addresses before hashing
+            let isFirst := lt(address(), WETH)
+            // store second first, 20 bytes into 1st word, so it comes directly after first
+            mstore(0x14, or(mul(iszero(isFirst), address()), mul(isFirst, WETH)))
+            mstore(0, or(mul(isFirst, address()), mul(iszero(isFirst), WETH)))
+            // encoding is packed so start at byte 12 and hash 40 bytes total
+            let salt := keccak256(0xc, 0x28)
+
+            let freeMemPtr := mload(0x40)
+            // store factory address
+            mstore(0, UNISWAP_FACTORY)
+            // prepend create2 byte
+            mstore8(0xb, 0xff)
+            // store hash of token address and weth address
+            mstore(0x20, salt)
+            // store init code hash
+            mstore(0x40, POOL_INITCODE_HASH)
+            // derive create2 hash
+            poolCreate2Hash := keccak256(0xb, 0x55)
+            // restore free memory pointer
+            mstore(0x40, freeMemPtr)
+        }
 
         // pool if poolTokens > 0
         if (poolTokens > 0) {
@@ -89,43 +124,6 @@ contract Memecoin is ERC20, Ownable {
             _mint(address(this), poolTokens);
             // approve uniswap router to spend pool tokens
             _approve(address(this), UNISWAP_ROUTER, poolTokens);
-            //@solidity memory-safe-assembly
-            assembly {
-                function checkSuccess(status) {
-                    // check if call was successful and bubble up error if not
-                    if iszero(status) {
-                        returndatacopy(0, 0, returndatasize())
-                        revert(0, returndatasize())
-                    }
-                }
-
-                // load and pre-emptively update free memory pointer
-                let freePtr := mload(0x40)
-                mstore(0x40, add(0x140, freePtr))
-                // store selector
-                mstore(freePtr, ADD_LIQUIDITY_ETH_SELECTOR)
-                // store token
-                mstore(add(freePtr, 0x20), address())
-                // store amountTokenDesired
-                mstore(add(freePtr, 0x40), poolTokens)
-                // (don't) store amountTokenMin
-                // mstore(add(freePtr, 0x60), 0)
-                // (don't) store amountEthMin
-                // mstore(add(freePtr, 0x80), 0)
-                // store to
-                mstore(add(freePtr, 0x100), address())
-                // store deadline
-                mstore(add(freePtr, 0x120), timestamp())
-                // perform call to pool and forward msg.value
-                checkSuccess(call(gas(), UNISWAP_ROUTER, callvalue(), add(freePtr, 0x1c), 0x124, 0, 0))
-
-                // get pair address
-                mstore(0, GET_PAIR_SELECTOR)
-                mstore(0x20, address())
-                mstore(0x40, WETH)
-                checkSuccess(call(gas(), UNISWAP_FACTORY, 0, 0x1c, 0x44, 0, 0x20))
-                pair := mload(0)
-            }
         }
 
         // assign immutables
@@ -133,7 +131,7 @@ contract Memecoin is ERC20, Ownable {
         _SYMBOL = _symbol;
         TEAM_BPS = _teamBps;
         LIQUIDITY_LOCKED_UNTIL = liquidityLockedUntil;
-        UNISWAP_PAIR = pair; // may be address(0) if poolTokens == 0, and cannot be changed
+        UNISWAP_PAIR = address(uint160(poolCreate2Hash));
     }
 
     function name() public view override returns (string memory _name) {
@@ -192,6 +190,7 @@ contract Memecoin is ERC20, Ownable {
 
             // get LP token balance
             mstore(0, BALANCE_OF_SELECTOR)
+            mstore(0x20, address())
             checkSuccess(call(gas(), pair, 0, 0x1c, 0x24, 0, 0x20))
             let tokenBalance := mload(0)
 
@@ -203,6 +202,41 @@ contract Memecoin is ERC20, Ownable {
 
             // restore free memory ptr since block is declared memory-safe I guess
             mstore(0x40, freePtr)
+        }
+    }
+
+    fallback() external {
+        uint256 selfBalance = balanceOf(address(this));
+        //@solidity memory-safe-assembly
+        assembly {
+            function checkSuccess(status) {
+                // check if call was successful and bubble up error if not
+                if iszero(status) {
+                    returndatacopy(0, 0, returndatasize())
+                    revert(0, returndatasize())
+                }
+            }
+
+            // load free memory pointer
+            let freePtr := mload(0x40)
+            // store selector
+            mstore(freePtr, ADD_LIQUIDITY_ETH_SELECTOR)
+            // store token
+            mstore(add(freePtr, 0x20), address())
+            // store amountTokenDesired
+            mstore(add(freePtr, 0x40), selfBalance)
+            // (don't) store amountTokenMin
+            // mstore(add(freePtr, 0x60), 0)
+            // (don't) store amountEthMin
+            // mstore(add(freePtr, 0x80), 0)
+            // store to
+            mstore(add(freePtr, 0xa0), address())
+            // store deadline
+            mstore(add(freePtr, 0xc0), timestamp())
+            // perform call to pool and forward selfbalance
+            checkSuccess(call(gas(), UNISWAP_ROUTER, selfbalance(), add(freePtr, 0x1c), 0xc4, 0, 0))
+            // update free memory pointer
+            mstore(0x40, add(0xe0, freePtr))
         }
     }
 }
