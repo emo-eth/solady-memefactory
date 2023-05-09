@@ -25,7 +25,7 @@ contract MemeFactory is CommitReveal {
         bytes32 salt;
         ///@solidity memory-safe-assembly
         assembly {
-            let loaded := calldataload(name.offset)
+            let loaded := calldataload(sub(name.offset, 1))
             let numShiftBits := sub(256, shl(3, name.length))
             let cleaned := shl(numShiftBits, shr(numShiftBits, loaded))
             salt := cleaned
