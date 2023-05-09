@@ -1,36 +1,38 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
-import "lib/openzeppelin-contracts/contracts/proxy/Clones.sol";
-import "./Memecoin.sol";
+import {Memecoin} from "./Memecoin.sol";
+import {CommitReveal} from "./CommitReveal.sol";
+import {Ownable} from "solady/auth/Ownable.sol";
 
-error FailedToInitialize();
-error TeamAllocationTooHIgh();
-error MustProvideLiquidity();
+contract MemeFactory is CommitReveal {
+    error FailedToInitialize();
+    error TeamAllocationTooHIgh();
+    error MustProvideLiquidity();
 
-contract MemeFactory {
     constructor() {
-        Memecoin memecoin = new Memecoin();
-        memecoin.initialize("quit", "quit", 0, msg.sender, 100, 0);
+        // Memecoin memecoin = new Memecoin();
     }
 
     function deployMeme(
         string calldata name,
         string calldata sym,
         uint256 totalSupply,
-        uint256 teamPercentage,
-        uint256 liquidityLockPeriodInSeconds
-    ) external payable returns (address tokenAddress) {
-        if (teamPercentage > 100) revert TeamAllocationTooHIgh();
-        if (teamPercentage != 100 && msg.value == 0) revert MustProvideLiquidity();
-        bytes32 salt = keccak256(abi.encodePacked(name));
-        tokenAddress = Clones.cloneDeterministic(implementation, salt);
-        (bool success,) = tokenAddress.call{value: msg.value}(
-            abi.encodeWithSelector(
-                0x0da953bd, name, sym, totalSupply, msg.sender, teamPercentage, liquidityLockPeriodInSeconds
-            )
-        );
+        uint256 teamBps,
+        uint256 liquidityLockPeriodInSeconds,
+        bytes32 commitmentSalt
+    ) external payable returns (address) {
+        // validate the deployer has committed to the name
+        _validateCommitment(commitmentSalt, name);
 
-        if (!success) revert FailedToInitialize();
+        // use the name as the salt for the deploy
+        bytes32 salt;
+        ///@solidity memory-safe-assembly
+        assembly {
+            salt := calldataload(name.offset)
+        }
+        Memecoin meme =
+        new Memecoin{salt: salt, value: msg.value}(name, sym, totalSupply, msg.sender, teamBps, liquidityLockPeriodInSeconds);
+        return address(meme);
     }
 }

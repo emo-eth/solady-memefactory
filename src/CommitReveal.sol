@@ -5,8 +5,8 @@ contract CommitReveal {
     error InvalidCommitment();
 
     uint256 constant INVALID_COMMITMENT_SELECTOR = 0xc06789fa;
-    uint256 constant COMMITMENT_LIFESPAN = 1 days;
-    uint256 constant COMMITMENT_DELAY = 1 minutes;
+    uint256 public constant COMMITMENT_LIFESPAN = 1 days;
+    uint256 public constant COMMITMENT_DELAY = 1 minutes;
 
     mapping(address committer => mapping(bytes32 commitmentHash => uint256 timestamp)) internal _commitments;
 
@@ -20,6 +20,15 @@ contract CommitReveal {
             mstore(0x20, nestedMapSlot)
             let finalSlot := keccak256(0, 0x40)
             sstore(finalSlot, timestamp())
+        }
+    }
+
+    function calculateCommitmentHash(string calldata name, bytes32 salt) external pure returns (bytes32 result) {
+        ///@solidity memory-safe-assembly
+        assembly {
+            mstore(0, salt)
+            mstore(0x20, calldataload(name.offset))
+            result := keccak256(0, 0x40)
         }
     }
 
@@ -51,7 +60,7 @@ contract CommitReveal {
             errBuffer := or(errBuffer, lt(sub(timestamp(), committedTimestamp), COMMITMENT_DELAY))
             if errBuffer {
                 mstore(0, INVALID_COMMITMENT_SELECTOR)
-                revert(0x1c, 0x20)
+                revert(0x1c, 0x04)
             }
         }
     }
