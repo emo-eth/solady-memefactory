@@ -134,33 +134,25 @@ contract Memecoin is ERC20, Ownable {
         UNISWAP_PAIR = address(uint160(poolCreate2Hash));
     }
 
-    function name() public view override returns (string memory _name) {
+    function name() public view override returns (string memory) {
         bytes32 name_ = _NAME;
         ///@solidity memory-safe-assembly
         assembly {
-            // get the free memory pointer
-            let freePtr := mload(0x40)
-            // set _name to the free memory pointer
-            _name := freePtr
-            // update free pointer by two words
-            mstore(0x40, add(0x40, freePtr))
-            // write the length of the name to the last byte of the first word
-            // and the contents to the next word
-            mstore(add(_name, 0x1f), name_)
+            mstore(0, 0x20)
+            mstore(0x3f, name_)
+            // can't override this as external, so note that this will break internal methods that try to call as public
+            return(0, 0x60)
         }
     }
 
-    function symbol() public view override returns (string memory _symbol) {
+    function symbol() public view override returns (string memory) {
         bytes32 symbol_ = _SYMBOL;
         ///@solidity memory-safe-assembly
         assembly {
-            let freePtr := mload(0x40)
-            _symbol := freePtr
-            // update free pointer by two words
-            mstore(0x40, add(0x40, freePtr))
-            // write the length of the symbol to the last byte of the first word
-            // and the contents to the next word
-            mstore(add(_symbol, 0x1f), symbol_)
+            mstore(0, 0x20)
+            mstore(0x3f, symbol_)
+            // can't override this as external, so note that this will break internal methods that try to call as public
+            return(0, 0x60)
         }
     }
 
@@ -209,14 +201,6 @@ contract Memecoin is ERC20, Ownable {
         uint256 selfBalance = balanceOf(address(this));
         //@solidity memory-safe-assembly
         assembly {
-            function checkSuccess(status) {
-                // check if call was successful and bubble up error if not
-                if iszero(status) {
-                    returndatacopy(0, 0, returndatasize())
-                    revert(0, returndatasize())
-                }
-            }
-
             // load free memory pointer
             let freePtr := mload(0x40)
             // store selector
@@ -234,9 +218,14 @@ contract Memecoin is ERC20, Ownable {
             // store deadline
             mstore(add(freePtr, 0xc0), timestamp())
             // perform call to pool and forward selfbalance
-            checkSuccess(call(gas(), UNISWAP_ROUTER, selfbalance(), add(freePtr, 0x1c), 0xc4, 0, 0))
-            // update free memory pointer
-            mstore(0x40, add(0xe0, freePtr))
+            let status := call(gas(), UNISWAP_ROUTER, selfbalance(), add(freePtr, 0x1c), 0xc4, 0, 0)
+            // check if call was successful and bubble up error if not
+            if iszero(status) {
+                returndatacopy(0, 0, returndatasize())
+                revert(0, returndatasize())
+            }
+            // immediately return
+            return(0, 0)
         }
     }
 }

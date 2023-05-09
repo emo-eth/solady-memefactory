@@ -32,6 +32,8 @@ contract CommitReveal {
             let cleaned := shl(numShiftBits, shr(numShiftBits, loaded))
             mstore(0x20, cleaned)
             result := keccak256(0, 0x40)
+            mstore(0, result)
+            return(0, 0x20)
         }
     }
 

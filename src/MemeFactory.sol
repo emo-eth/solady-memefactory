@@ -42,6 +42,10 @@ contract MemeFactory is CommitReveal {
                 }
             }
         }
-        return address(meme);
+        ///@solidity memory-safe-assembly
+        assembly {
+            mstore(0, meme)
+            return(0, 0x20)
+        }
     }
 }
