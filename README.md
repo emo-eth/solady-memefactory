@@ -8,10 +8,9 @@ Based on [0xQuit's implementation](https://etherscan.io/address/0x3e9491cb1337b9
 
 - Commit-reveal scheme so your token name and address can't be front-run
   - Tokens with the same name can still be deployed, but only after committing to a (different) set of initialization params/salt and waiting out the commitment period
-- Compared to 0xQuit's implementation, deploys are 20-25% more expensive, but
+- Compared to 0xQuit's implementation (200 optimizer-runs), with ~max optimizer-runs, deploys are 20-25% more expensive, but
 - Token methods are around 8% cheaper
   - The additional gas to deploy is offset after only 200 total on-chain token interactions – approvals, transfers, balance checks, etc.
-
 
 
 # Usage
