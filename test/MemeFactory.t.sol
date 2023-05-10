@@ -30,7 +30,7 @@ contract MemeFactoryTest is BaseTest {
                 totalSupply: 69,
                 teamBps: 1000,
                 liquidityLockPeriodInSeconds: 420,
-                commitmentSalt: validationSalt
+                salt: validationSalt
             })
         );
         assertEq(meme.name(), name);
@@ -46,7 +46,7 @@ contract MemeFactoryTest is BaseTest {
             totalSupply: 69,
             teamBps: 1000,
             liquidityLockPeriodInSeconds: 420,
-            commitmentSalt: validationSalt
+            salt: validationSalt
         }) {
             fail("should have reverted");
         } catch {
@@ -66,7 +66,7 @@ contract MemeFactoryTest is BaseTest {
             totalSupply: 69,
             teamBps: 1000,
             liquidityLockPeriodInSeconds: 420,
-            commitmentSalt: bytes32("invalid")
+            salt: bytes32("invalid")
         });
     }
 
@@ -83,7 +83,7 @@ contract MemeFactoryTest is BaseTest {
                 totalSupply: 69,
                 teamBps: 10000,
                 liquidityLockPeriodInSeconds: 420,
-                commitmentSalt: validationSalt
+                salt: validationSalt
             })
         );
         assertEq(meme.UNISWAP_PAIR().code.length, 0);
@@ -101,7 +101,7 @@ contract MemeFactoryTest is BaseTest {
             totalSupply: 0,
             teamBps: 10000,
             liquidityLockPeriodInSeconds: 0,
-            commitmentSalt: validationSalt
+            salt: validationSalt
         });
     }
 }

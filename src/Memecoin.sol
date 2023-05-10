@@ -7,8 +7,6 @@ import {IUniswapV2Factory} from "./interface/IUniswapV2Factory.sol";
 import {IUniswapV2Router} from "./interface/IUniswapV2Router.sol";
 
 contract Memecoin is ERC20, Ownable {
-    error FailedToProvideLiquidity();
-    error CallerNotOwner();
     error LiquidityLocked();
     error InvalidInitializationParams();
 
@@ -71,7 +69,7 @@ contract Memecoin is ERC20, Ownable {
                     // LHS will be 0 if no overflow
                     mul(
                         lt(liquidityLockedUntil, timestamp()),
-                        //type(uint256).max
+                        // type(uint256).max
                         not(0)
                     )
                 )
